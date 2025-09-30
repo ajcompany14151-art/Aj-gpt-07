@@ -1,0 +1,20 @@
+{
+  "name": "aj-studioz-ai-agent",
+  "version": "1.0.0",
+  "description": "AI Agent powered by Gemini",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild index.tsx --bundle --outfile=dist/index.js --define:process.env.API_KEY=\\\"\"$API_KEY\\\"\" --jsx=automatic"
+  },
+  "keywords": [
+    "ai",
+    "gemini",
+    "chat"
+  ],
+  "author": "AJ STUDIOZ",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  }
+}
