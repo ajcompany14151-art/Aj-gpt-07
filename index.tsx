@@ -40,7 +40,7 @@ let isAwaitingResponse = false;
 
 // --- ICONS ---
 const ICONS = {
-    regenerate: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 L 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9c2.39 0 4.68.94 6.34 2.6l-1.69 1.69"/><path d="M21 12a9 9 0 0 1-9 9c-2.39 0-4.68-.94-6.34-2.6l1.69-1.69"/><path d="M3 7v6h6"/><path d="M21 17v-6h-6"/></svg>`
+    regenerate: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9c2.39 0 4.68.94 6.34 2.6l-1.69 1.69"/><path d="M21 12a9 9 0 0 1-9 9c-2.39 0-4.68-.94-6.34-2.6l1.69-1.69"/><path d="M3 7v6h6"/><path d="M21 17v-6h-6"/></svg>`
 };
 
 // --- CORE FUNCTIONS ---
@@ -217,30 +217,48 @@ async function saveCurrentChat(prompt: string) {
 // --- MESSAGE RENDERING & PARSING ---
 
 /**
+ * Securely escapes HTML.
+ * @param html The HTML string to escape.
+ * @returns The escaped HTML string.
+ */
+function escapeHTML(html: string): string {
+    return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+
+/**
  * Parses markdown-like syntax to an HTML string, with security in mind.
+ * @param text The raw text to parse.
+ * @returns An HTML string.
  */
 function parseMarkdown(text: string): string {
-    // First, escape HTML characters to prevent XSS attacks from raw HTML in the input.
-    const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const placeholders: string[] = [];
+    let processedText = text;
 
-    // Process markdown syntax on the escaped text.
-    return escapedText
-        // Handle code blocks first, as they are multi-line and can contain other symbols.
-        .replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
-            // The `code` variable is captured from `escapedText`, so its HTML is already escaped.
-            // We just need to trim it. We don't re-escape, as that would double-escape characters.
-            const trimmedCode = code.trim();
-            // The `hljs` class is a hint for highlight.js to apply styles.
-            // The content is safe for innerHTML because it's been escaped. `highlightElement`
-            // will later read this content as text, highlight it, and replace it with safe HTML.
-            return `<pre><code class="language-${lang || 'plaintext'} hljs">${trimmedCode}</code></pre>`;
-        })
-        // Handle bold text: **text**
+    // 1. Isolate and process code blocks first.
+    // This prevents markdown parsing inside code blocks.
+    processedText = processedText.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+        const escapedCode = escapeHTML(code.trim());
+        const placeholder = `<pre><code class="language-${lang || 'plaintext'} hljs">${escapedCode}</code></pre>`;
+        placeholders.push(placeholder);
+        return `__CODEBLOCK_${placeholders.length - 1}__`;
+    });
+
+    // 2. Escape the rest of the HTML to prevent XSS.
+    processedText = escapeHTML(processedText);
+    
+    // 3. Process other markdown syntax on the escaped text.
+    processedText = processedText
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        // Handle italic text: *text*
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        // Handle inline code: `code`. This is safe because $1 comes from the already-escaped `escapedText`.
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
+        .replace(/`([^`]+)`/g, '<code>$1</code>'); // This is safe now
+
+    // 4. Restore the code blocks.
+    processedText = processedText.replace(/__CODEBLOCK_(\d+)__/g, (_match, index) => {
+        return placeholders[parseInt(index, 10)];
+    });
+
+    return processedText;
 }
 
 
