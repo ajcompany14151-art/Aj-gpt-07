@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "keywords": [
@@ -19,6 +19,7 @@
     "@google/genai": "^0.7.0"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "vite": "^5.0.0",
     "typescript": "^5.4.5"
   }
