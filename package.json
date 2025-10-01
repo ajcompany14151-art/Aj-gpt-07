@@ -2,9 +2,11 @@
   "name": "aj-studioz-ai-agent",
   "version": "1.0.0",
   "description": "AI Agent powered by Gemini",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "build": "esbuild index.tsx --bundle --outfile=dist/index.js --define:process.env.API_KEY=\\\"\"$API_KEY\\\"\" --jsx=automatic"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "keywords": [
     "ai",
@@ -17,7 +19,7 @@
     "@google/genai": "^0.7.0"
   },
   "devDependencies": {
-    "esbuild": "^0.20.2",
+    "vite": "^5.0.0",
     "typescript": "^5.4.5"
   }
 }
