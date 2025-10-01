@@ -1,101 +1,223 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>AJ STUDIOZ AI AGENT</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AJ STUDIOZ AI AGENT - Advanced</title>
+  
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="index.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Highlight.js -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0"
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="index.css">
+  
+  <!-- Import Map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0"
+    }
   }
-}
-</script>
+  </script>
 </head>
 <body data-theme="dark">
+  <!-- Toast Notification -->
   <div id="toast" class="toast">Copied to clipboard!</div>
+  
+  <!-- Main App Layout -->
   <div class="app-layout">
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <button id="new-chat-btn" aria-label="Start new chat">
-          <i class="fas fa-plus"></i>
-          New Chat
-        </button>
+        <div class="logo-container">
+          <div class="logo">AJ</div>
+          <h2>STUDIOZ AI</h2>
+        </div>
         <button id="sidebar-toggle-btn" aria-label="Toggle sidebar">
-            <i class="fas fa-bars"></i>
+          <i class="fas fa-bars"></i>
         </button>
       </div>
+      
       <div class="sidebar-content">
+        <button id="new-chat-btn" class="new-chat-btn">
+          <i class="fas fa-plus"></i>
+          <span>New Chat</span>
+        </button>
+        
         <div class="search-container">
           <input type="text" id="search-history" placeholder="Search chat history..." aria-label="Search chat history">
           <i class="fas fa-search"></i>
         </div>
-        <h2 class="history-title">Recent</h2>
-        <ul id="chat-history">
-          <!-- Chat history items will be dynamically added here -->
-        </ul>
+        
+        <div class="chat-categories">
+          <div class="category">
+            <div class="category-header">
+              <h3>Recent</h3>
+              <button class="category-toggle" aria-label="Toggle category">
+                <i class="fas fa-chevron-down"></i>
+              </button>
+            </div>
+            <ul id="chat-history" class="chat-list">
+              <!-- Chat history items will be dynamically added here -->
+            </ul>
+          </div>
+          
+          <div class="category">
+            <div class="category-header">
+              <h3>Pinned</h3>
+              <button class="category-toggle" aria-label="Toggle category">
+                <i class="fas fa-chevron-down"></i>
+              </button>
+            </div>
+            <ul id="pinned-chats" class="chat-list">
+              <!-- Pinned chat items will be dynamically added here -->
+            </ul>
+          </div>
+          
+          <div class="category">
+            <div class="category-header">
+              <h3>Archived</h3>
+              <button class="category-toggle" aria-label="Toggle category">
+                <i class="fas fa-chevron-down"></i>
+              </button>
+            </div>
+            <ul id="archived-chats" class="chat-list">
+              <!-- Archived chat items will be dynamically added here -->
+            </ul>
+          </div>
+        </div>
       </div>
+      
       <div class="sidebar-footer">
+        <button id="templates-btn" class="sidebar-action-btn" aria-label="Chat templates">
+          <i class="fas fa-layer-group"></i>
+          <span>Templates</span>
+        </button>
         <button id="export-chat-btn" class="sidebar-action-btn" aria-label="Export chat">
           <i class="fas fa-download"></i>
-          <span>Export Chat</span>
+          <span>Export</span>
         </button>
         <button id="settings-btn" class="sidebar-action-btn" aria-label="Settings">
           <i class="fas fa-cog"></i>
           <span>Settings</span>
         </button>
-        <button id="theme-toggle-btn" class="sidebar-action-btn" aria-label="Toggle dark mode">
+        <button id="theme-toggle-btn" class="sidebar-action-btn" aria-label="Toggle theme">
           <i class="fas fa-moon"></i>
-          <span>Dark Mode</span>
+          <span>Theme</span>
         </button>
       </div>
     </aside>
+    
+    <!-- Main Content -->
     <div class="main-content" id="main-content">
-        <div id="overlay"></div>
-        <header class="main-header">
-            <button id="mobile-menu-btn" aria-label="Open menu">
-                <i class="fas fa-bars"></i>
-            </button>
-            <h3>Model: <span>Gemini 2.5 Flash</span></h3>
-            <div class="header-actions">
-              <button id="clear-chat-btn" aria-label="Clear current chat">
-                <i class="fas fa-trash"></i>
-              </button>
-            </div>
-        </header>
-        <main id="chat-container">
-            <!-- Chat messages or welcome screen will be appended here -->
-        </main>
-        <footer>
-            <form id="chat-form" aria-label="Chat input form">
-                <div class="input-actions">
-                  <button type="button" id="attach-btn" aria-label="Attach file">
-                    <i class="fas fa-paperclip"></i>
-                  </button>
-                  <input type="file" id="file-input" accept="image/*" style="display: none;">
-                </div>
-                <textarea id="chat-input" placeholder="Message AJ STUDIOZ AI AGENT..." required autocomplete="off" aria-label="Message input" rows="1"></textarea>
-                <button type="submit" aria-label="Send message">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </form>
-            <div class="typing-indicator" id="typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
-              <span>AJ STUDIOZ AI is typing...</span>
-            </div>
-            <p class="footer-notice">AJ Studioz AI can make mistakes. Consider checking important information.</p>
-        </footer>
+      <div id="overlay"></div>
+      
+      <!-- Header -->
+      <header class="main-header">
+        <button id="mobile-menu-btn" aria-label="Open menu">
+          <i class="fas fa-bars"></i>
+        </button>
+        
+        <div class="chat-info">
+          <h3 id="current-chat-title">New Chat</h3>
+          <div class="chat-meta">
+            <span id="chat-model">Model: Gemini 2.5 Flash</span>
+            <span id="message-count">0 messages</span>
+          </div>
+        </div>
+        
+        <div class="header-actions">
+          <button id="search-in-chat-btn" aria-label="Search in chat" class="icon-btn">
+            <i class="fas fa-search"></i>
+          </button>
+          <button id="bookmark-chat-btn" aria-label="Bookmark chat" class="icon-btn">
+            <i class="fas fa-bookmark"></i>
+          </button>
+          <button id="clear-chat-btn" aria-label="Clear current chat" class="icon-btn">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </header>
+      
+      <!-- Chat Container -->
+      <main id="chat-container">
+        <!-- Chat messages or welcome screen will be appended here -->
+      </main>
+      
+      <!-- Input Area -->
+      <footer>
+        <div class="input-toolbar">
+          <button id="attach-btn" class="toolbar-btn" aria-label="Attach file">
+            <i class="fas fa-paperclip"></i>
+          </button>
+          <input type="file" id="file-input" accept="image/*, .pdf, .docx, .txt" style="display: none;">
+          
+          <div class="toolbar-divider"></div>
+          
+          <button id="voice-btn" class="toolbar-btn" aria-label="Voice input">
+            <i class="fas fa-microphone"></i>
+          </button>
+          
+          <div class="toolbar-divider"></div>
+          
+          <button id="format-btn" class="toolbar-btn" aria-label="Formatting options">
+            <i class="fas fa-text-height"></i>
+          </button>
+        </div>
+        
+        <form id="chat-form" aria-label="Chat input form">
+          <textarea id="chat-input" placeholder="Message AJ STUDIOZ AI AGENT..." required autocomplete="off" aria-label="Message input" rows="1"></textarea>
+          <button type="submit" aria-label="Send message">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </form>
+        
+        <div class="typing-indicator" id="typing-indicator">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span>AJ STUDIOZ AI is typing...</span>
+        </div>
+        
+        <p class="footer-notice">AJ Studioz AI can make mistakes. Consider checking important information.</p>
+      </footer>
     </div>
   </div>
-
+  
+  <!-- Formatting Toolbar -->
+  <div id="formatting-toolbar" class="formatting-toolbar">
+    <button class="format-btn" data-format="bold" aria-label="Bold">
+      <i class="fas fa-bold"></i>
+    </button>
+    <button class="format-btn" data-format="italic" aria-label="Italic">
+      <i class="fas fa-italic"></i>
+    </button>
+    <button class="format-btn" data-format="code" aria-label="Code">
+      <i class="fas fa-code"></i>
+    </button>
+    <button class="format-btn" data-format="link" aria-label="Insert link">
+      <i class="fas fa-link"></i>
+    </button>
+    <button class="format-btn" data-format="list" aria-label="Bullet list">
+      <i class="fas fa-list-ul"></i>
+    </button>
+    <button class="format-btn" data-format="quote" aria-label="Quote">
+      <i class="fas fa-quote-right"></i>
+    </button>
+  </div>
+  
   <!-- Settings Modal -->
   <div id="settings-modal" class="modal">
     <div class="modal-content">
@@ -106,25 +228,123 @@
         </button>
       </div>
       <div class="modal-body">
-        <div class="setting-group">
-          <label for="model-select">AI Model</label>
-          <select id="model-select">
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="gemini-pro">Gemini Pro</option>
-          </select>
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="general">General</button>
+          <button class="tab-btn" data-tab="appearance">Appearance</button>
+          <button class="tab-btn" data-tab="advanced">Advanced</button>
         </div>
-        <div class="setting-group">
-          <label for="temperature">Creativity</label>
-          <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7">
-          <div class="range-labels">
-            <span>Precise</span>
-            <span>Balanced</span>
-            <span>Creative</span>
+        
+        <div class="tab-content active" id="general-tab">
+          <div class="setting-group">
+            <label for="model-select">AI Model</label>
+            <select id="model-select">
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-pro">Gemini Pro</option>
+              <option value="gemini-ultra">Gemini Ultra (Pro)</option>
+            </select>
+          </div>
+          
+          <div class="setting-group">
+            <label for="temperature">Creativity</label>
+            <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7">
+            <div class="range-labels">
+              <span>Precise</span>
+              <span>Balanced</span>
+              <span>Creative</span>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label for="max-tokens">Max Response Length</label>
+            <input type="number" id="max-tokens" min="100" max="4000" value="1000">
+          </div>
+          
+          <div class="setting-group">
+            <label for="language">Response Language</label>
+            <select id="language">
+              <option value="auto">Auto-detect</option>
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="zh">Chinese</option>
+            </select>
           </div>
         </div>
-        <div class="setting-group">
-          <label for="max-tokens">Max Response Length</label>
-          <input type="number" id="max-tokens" min="100" max="4000" value="1000">
+        
+        <div class="tab-content" id="appearance-tab">
+          <div class="setting-group">
+            <label>Theme</label>
+            <div class="theme-options">
+              <button class="theme-option" data-theme="dark">
+                <div class="theme-preview dark"></div>
+                <span>Dark</span>
+              </button>
+              <button class="theme-option" data-theme="light">
+                <div class="theme-preview light"></div>
+                <span>Light</span>
+              </button>
+              <button class="theme-option" data-theme="blue">
+                <div class="theme-preview blue"></div>
+                <span>Blue</span>
+              </button>
+              <button class="theme-option" data-theme="green">
+                <div class="theme-preview green"></div>
+                <span>Green</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label for="font-size">Font Size</label>
+            <select id="font-size">
+              <option value="small">Small</option>
+              <option value="medium" selected>Medium</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+          
+          <div class="setting-group">
+            <label for="message-density">Message Density</label>
+            <select id="message-density">
+              <option value="compact">Compact</option>
+              <option value="comfortable" selected>Comfortable</option>
+              <option value="spacious">Spacious</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="tab-content" id="advanced-tab">
+          <div class="setting-group">
+            <label for="api-key">API Key</label>
+            <input type="password" id="api-key" placeholder="Enter your API key">
+            <p class="setting-description">Your API key is stored locally and never sent to our servers.</p>
+          </div>
+          
+          <div class="setting-group">
+            <label for="data-privacy">Data Privacy</label>
+            <div class="toggle-switch">
+              <input type="checkbox" id="data-privacy" checked>
+              <label for="data-privacy"></label>
+            </div>
+            <p class="setting-description">Improve the model by saving conversations. Uncheck to disable.</p>
+          </div>
+          
+          <div class="setting-group">
+            <label for="auto-save">Auto-save Drafts</label>
+            <div class="toggle-switch">
+              <input type="checkbox" id="auto-save" checked>
+              <label for="auto-save"></label>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label for="keyboard-shortcuts">Keyboard Shortcuts</label>
+            <div class="toggle-switch">
+              <input type="checkbox" id="keyboard-shortcuts" checked>
+              <label for="keyboard-shortcuts"></label>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -132,13 +352,173 @@
       </div>
     </div>
   </div>
-
+  
+  <!-- Templates Modal -->
+  <div id="templates-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Chat Templates</h2>
+        <button class="close-modal" id="close-templates">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="templates-grid">
+          <div class="template-card" data-template="coding-assistant">
+            <div class="template-icon">
+              <i class="fas fa-code"></i>
+            </div>
+            <h3>Coding Assistant</h3>
+            <p>Get help with programming, debugging, and code optimization</p>
+          </div>
+          
+          <div class="template-card" data-template="content-creator">
+            <div class="template-icon">
+              <i class="fas fa-pen-fancy"></i>
+            </div>
+            <h3>Content Creator</h3>
+            <p>Generate blog posts, social media content, and marketing copy</p>
+          </div>
+          
+          <div class="template-card" data-template="research-analyst">
+            <div class="template-icon">
+              <i class="fas fa-microscope"></i>
+            </div>
+            <h3>Research Analyst</h3>
+            <p>Analyze data, summarize research papers, and extract insights</p>
+          </div>
+          
+          <div class="template-card" data-template="language-tutor">
+            <div class="template-icon">
+              <i class="fas fa-language"></i>
+            </div>
+            <h3>Language Tutor</h3>
+            <p>Practice and learn new languages with AI assistance</p>
+          </div>
+          
+          <div class="template-card" data-template="career-coach">
+            <div class="template-icon">
+              <i class="fas fa-briefcase"></i>
+            </div>
+            <h3>Career Coach</h3>
+            <p>Get resume help, interview prep, and career advice</p>
+          </div>
+          
+          <div class="template-card" data-template="custom">
+            <div class="template-icon">
+              <i class="fas fa-plus-circle"></i>
+            </div>
+            <h3>Custom Template</h3>
+            <p>Create your own personalized chat template</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Search Modal -->
+  <div id="search-modal" class="modal">
+    <div class="modal-content search-modal">
+      <div class="modal-header">
+        <div class="search-bar">
+          <i class="fas fa-search"></i>
+          <input type="text" id="search-input" placeholder="Search messages..." aria-label="Search messages">
+        </div>
+        <button class="close-modal" id="close-search">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="search-results" id="search-results">
+          <div class="search-empty">
+            <i class="fas fa-search"></i>
+            <p>Search for messages in this conversation</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Code Modal -->
+  <div id="code-modal" class="modal">
+    <div class="modal-content code-modal">
+      <div class="modal-header">
+        <h3 id="code-language">Code</h3>
+        <div class="code-actions">
+          <button id="copy-full-code" class="icon-btn">
+            <i class="fas fa-copy"></i>
+          </button>
+          <button id="download-code" class="icon-btn">
+            <i class="fas fa-download"></i>
+          </button>
+          <button class="close-modal" id="close-code">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <pre><code id="code-content"></code></pre>
+      </div>
+    </div>
+  </div>
+  
   <!-- Context Menu -->
   <div id="context-menu" class="context-menu">
     <ul>
-      <li id="rename-chat"><i class="fas fa-edit"></i> Rename</li>
-      <li id="delete-chat"><i class="fas fa-trash"></i> Delete</li>
+      <li id="reply-to-message"><i class="fas fa-reply"></i> Reply</li>
+      <li id="bookmark-message"><i class="fas fa-bookmark"></i> Bookmark</li>
+      <li id="copy-message"><i class="fas fa-copy"></i> Copy</li>
+      <li id="share-message"><i class="fas fa-share-alt"></i> Share</li>
+      <li id="delete-message"><i class="fas fa-trash"></i> Delete</li>
     </ul>
+  </div>
+  
+  <!-- Keyboard Shortcuts Help -->
+  <div id="shortcuts-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button class="close-modal" id="close-shortcuts">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-grid">
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + N</div>
+            <div class="shortcut-desc">New Chat</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + S</div>
+            <div class="shortcut-desc">Save Chat</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + E</div>
+            <div class="shortcut-desc">Export Chat</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + F</div>
+            <div class="shortcut-desc">Search in Chat</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + /</div>
+            <div class="shortcut-desc">Show Shortcuts</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + D</div>
+            <div class="shortcut-desc">Toggle Dark Mode</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + B</div>
+            <div class="shortcut-desc">Bold Text</div>
+          </div>
+          <div class="shortcut-item">
+            <div class="shortcut-key">Ctrl + I</div>
+            <div class="shortcut-desc">Italic Text</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/index.tsx"></script>
