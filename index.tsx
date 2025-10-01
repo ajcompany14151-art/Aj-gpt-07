@@ -6,16 +6,42 @@ import { GoogleGenAI, Chat } from "@google/genai";
 
 // --- TYPES ---
 type Message = {
+    id: string;
     role: 'user' | 'model';
     parts: { text: string }[];
-    timestamp?: string;
+    timestamp: string;
+    reactions?: { emoji: string; count: number }[];
+    isBookmarked?: boolean;
+    threadId?: string;
 };
+
+type Thread = {
+    id: string;
+    parentMessageId: string;
+    messages: string[];
+};
+
 type ChatSession = {
     id: string;
     title: string;
     messages: Message[];
+    threads: Thread[];
     createdAt: string;
     updatedAt: string;
+    isPinned: boolean;
+    isArchived: boolean;
+    model: string;
+    temperature: number;
+    maxTokens: number;
+};
+
+type Template = {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    prompt: string;
+    category: string;
 };
 
 // --- GLOBAL DECLARATIONS ---
@@ -30,6 +56,8 @@ const sidebar = document.getElementById('sidebar') as HTMLElement;
 const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn') as HTMLButtonElement;
 const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement;
 const chatHistoryList = document.getElementById('chat-history') as HTMLUListElement;
+const pinnedChatsList = document.getElementById('pinned-chats') as HTMLUListElement;
+const archivedChatsList = document.getElementById('archived-chats') as HTMLUListElement;
 const mainContent = document.getElementById('main-content') as HTMLElement;
 const toastElement = document.getElementById('toast') as HTMLDivElement;
 const mobileMenuBtn = document.getElementById('mobile-menu-btn') as HTMLButtonElement;
@@ -50,6 +78,27 @@ const typingIndicator = document.getElementById('typing-indicator') as HTMLDivEl
 const contextMenu = document.getElementById('context-menu') as HTMLDivElement;
 const renameChatOption = document.getElementById('rename-chat') as HTMLLIElement;
 const deleteChatOption = document.getElementById('delete-chat') as HTMLLIElement;
+const templatesBtn = document.getElementById('templates-btn') as HTMLButtonElement;
+const templatesModal = document.getElementById('templates-modal') as HTMLDivElement;
+const closeTemplatesBtn = document.getElementById('close-templates') as HTMLButtonElement;
+const searchInChatBtn = document.getElementById('search-in-chat-btn') as HTMLButtonElement;
+const searchModal = document.getElementById('search-modal') as HTMLDivElement;
+const closeSearchBtn = document.getElementById('close-search') as HTMLButtonElement;
+const searchInput = document.getElementById('search-input') as HTMLInputElement;
+const searchResults = document.getElementById('search-results') as HTMLDivElement;
+const codeModal = document.getElementById('code-modal') as HTMLDivElement;
+const closeCodeBtn = document.getElementById('close-code') as HTMLButtonElement;
+const codeContent = document.getElementById('code-content') as HTMLElement;
+const copyFullCodeBtn = document.getElementById('copy-full-code') as HTMLButtonElement;
+const downloadCodeBtn = document.getElementById('download-code') as HTMLButtonElement;
+const formatBtn = document.getElementById('format-btn') as HTMLButtonElement;
+const formattingToolbar = document.getElementById('formatting-toolbar') as HTMLDivElement;
+const voiceBtn = document.getElementById('voice-btn') as HTMLButtonElement;
+const bookmarkChatBtn = document.getElementById('bookmark-chat-btn') as HTMLButtonElement;
+const shortcutsModal = document.getElementById('shortcuts-modal') as HTMLDivElement;
+const closeShortcutsBtn = document.getElementById('close-shortcuts') as HTMLButtonElement;
+const currentChatTitle = document.getElementById('current-chat-title') as HTMLHeadingElement;
+const messageCount = document.getElementById('message-count') as HTMLSpanElement;
 
 // --- STATE ---
 let chat: Chat;
@@ -59,17 +108,92 @@ let isAwaitingResponse = false;
 let settings = {
   model: 'gemini-2.5-flash',
   temperature: 0.7,
-  maxTokens: 1000
+  maxTokens: 1000,
+  theme: 'dark',
+  fontSize: 'medium',
+  messageDensity: 'comfortable',
+  language: 'auto',
+  dataPrivacy: true,
+  autoSave: true,
+  keyboardShortcuts: true
 };
 let contextMenuTarget: HTMLElement | null = null;
+let voiceRecognition: any = null;
+let isListening = false;
+let searchQuery = '';
+let draftMessage = '';
+let currentThread: Thread | null = null;
 
 // --- ICONS ---
 const ICONS = {
     regenerate: `<i class="fas fa-redo"></i>`,
     copy: `<i class="fas fa-copy"></i>`,
     download: `<i class="fas fa-download"></i>`,
-    close: `<i class="fas fa-times"></i>`
+    close: `<i class="fas fa-times"></i>`,
+    bookmark: `<i class="fas fa-bookmark"></i>`,
+    bookmarked: `<i class="fas fa-bookmark"></i>`,
+    reply: `<i class="fas fa-reply"></i>`,
+    share: `<i class="fas fa-share-alt"></i>`,
+    delete: `<i class="fas fa-trash"></i>`,
+    expand: `<i class="fas fa-expand"></i>`,
+    collapse: `<i class="fas fa-compress"></i>`,
+    like: `<i class="fas fa-thumbs-up"></i>`,
+    dislike: `<i class="fas fa-thumbs-down"></i>`,
+    heart: `<i class="fas fa-heart"></i>`,
+    laugh: `<i class="fas fa-laugh"></i>`
 };
+
+// --- TEMPLATES ---
+const TEMPLATES: Template[] = [
+    {
+        id: 'coding-assistant',
+        name: 'Coding Assistant',
+        description: 'Get help with programming, debugging, and code optimization',
+        icon: 'fas fa-code',
+        prompt: 'I need help with my code. Here\'s what I\'m working on: ',
+        category: 'Development'
+    },
+    {
+        id: 'content-creator',
+        name: 'Content Creator',
+        description: 'Generate blog posts, social media content, and marketing copy',
+        icon: 'fas fa-pen-fancy',
+        prompt: 'Help me create content about: ',
+        category: 'Writing'
+    },
+    {
+        id: 'research-analyst',
+        name: 'Research Analyst',
+        description: 'Analyze data, summarize research papers, and extract insights',
+        icon: 'fas fa-microscope',
+        prompt: 'I need research help on the following topic: ',
+        category: 'Research'
+    },
+    {
+        id: 'language-tutor',
+        name: 'Language Tutor',
+        description: 'Practice and learn new languages with AI assistance',
+        icon: 'fas fa-language',
+        prompt: 'I want to practice my language skills. Can you help me with: ',
+        category: 'Education'
+    },
+    {
+        id: 'career-coach',
+        name: 'Career Coach',
+        description: 'Get resume help, interview prep, and career advice',
+        icon: 'fas fa-briefcase',
+        prompt: 'I need career advice. Here\'s my situation: ',
+        category: 'Career'
+    },
+    {
+        id: 'custom',
+        name: 'Custom Template',
+        description: 'Create your own personalized chat template',
+        icon: 'fas fa-plus-circle',
+        prompt: '',
+        category: 'Custom'
+    }
+];
 
 // --- CORE FUNCTIONS ---
 
@@ -135,6 +259,14 @@ function formatDateForHistory(date: Date): string {
   }
 }
 
+/**
+ * Generates a unique ID.
+ * @returns A unique ID string.
+ */
+function generateId(): string {
+  return `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
 
 // --- UI & THEME MANAGEMENT ---
 
@@ -159,28 +291,50 @@ function toggleMobileMenu() {
  */
 function toggleTheme() {
     const currentTheme = document.body.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const themes = ['dark', 'light', 'blue', 'green'];
+    const currentIndex = themes.indexOf(currentTheme || 'dark');
+    const nextIndex = (currentIndex + 1) % themes.length;
+    const newTheme = themes[nextIndex];
+    
     document.body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
+    settings.theme = newTheme;
+    localStorage.setItem('settings', JSON.stringify(settings));
     
     // Update theme icon
     const themeIcon = themeToggleBtn.querySelector('i');
     if (themeIcon) {
-      themeIcon.className = newTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+      if (newTheme === 'dark') {
+        themeIcon.className = 'fas fa-moon';
+      } else if (newTheme === 'light') {
+        themeIcon.className = 'fas fa-sun';
+      } else {
+        themeIcon.className = 'fas fa-palette';
+      }
     }
+    
+    showToast(`Theme changed to ${newTheme}`);
 }
 
 /**
  * Loads the saved theme from local storage.
  */
 function loadTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.body.setAttribute('data-theme', savedTheme);
-    
-    // Update theme icon
-    const themeIcon = themeToggleBtn.querySelector('i');
-    if (themeIcon) {
-      themeIcon.className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+    const savedSettings = localStorage.getItem('settings');
+    if (savedSettings) {
+        settings = JSON.parse(savedSettings);
+        document.body.setAttribute('data-theme', settings.theme);
+        
+        // Update theme icon
+        const themeIcon = themeToggleBtn.querySelector('i');
+        if (themeIcon) {
+          if (settings.theme === 'dark') {
+            themeIcon.className = 'fas fa-moon';
+          } else if (settings.theme === 'light') {
+            themeIcon.className = 'fas fa-sun';
+          } else {
+            themeIcon.className = 'fas fa-palette';
+          }
+        }
     }
 }
 
@@ -201,6 +355,35 @@ function loadSettings() {
     modelSelect.value = settings.model;
     temperatureSlider.value = settings.temperature.toString();
     maxTokensInput.value = settings.maxTokens.toString();
+    
+    // Apply settings
+    applySettings();
+  }
+}
+
+/**
+ * Applies settings to the UI.
+ */
+function applySettings() {
+  // Apply font size
+  document.body.classList.remove('font-small', 'font-medium', 'font-large');
+  document.body.classList.add(`font-${settings.fontSize}`);
+  
+  // Apply message density
+  document.body.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
+  document.body.classList.add(`density-${settings.messageDensity}`);
+  
+  // Update message padding and gap
+  const root = document.documentElement;
+  if (settings.messageDensity === 'compact') {
+    root.style.setProperty('--message-padding', '0.75rem');
+    root.style.setProperty('--message-gap', '1rem');
+  } else if (settings.messageDensity === 'comfortable') {
+    root.style.setProperty('--message-padding', '1.25rem');
+    root.style.setProperty('--message-gap', '1.5rem');
+  } else if (settings.messageDensity === 'spacious') {
+    root.style.setProperty('--message-padding', '1.75rem');
+    root.style.setProperty('--message-gap', '2rem');
   }
 }
 
@@ -211,12 +394,22 @@ function saveSettings() {
   settings = {
     model: modelSelect.value,
     temperature: parseFloat(temperatureSlider.value),
-    maxTokens: parseInt(maxTokensInput.value)
+    maxTokens: parseInt(maxTokensInput.value),
+    theme: settings.theme,
+    fontSize: (document.getElementById('font-size') as HTMLSelectElement)?.value || 'medium',
+    messageDensity: (document.getElementById('message-density') as HTMLSelectElement)?.value || 'comfortable',
+    language: (document.getElementById('language') as HTMLSelectElement)?.value || 'auto',
+    dataPrivacy: (document.getElementById('data-privacy') as HTMLInputElement)?.checked || true,
+    autoSave: (document.getElementById('auto-save') as HTMLInputElement)?.checked || true,
+    keyboardShortcuts: (document.getElementById('keyboard-shortcuts') as HTMLInputElement)?.checked || true
   };
   
   localStorage.setItem('settings', JSON.stringify(settings));
   showToast('Settings saved successfully!');
   toggleSettingsModal();
+  
+  // Apply settings
+  applySettings();
   
   // Reinitialize chat with new settings
   chat = initializeChat();
@@ -275,6 +468,10 @@ function renameChat() {
     session.updatedAt = new Date().toISOString();
     saveHistoryToStorage();
     renderHistoryList();
+    
+    if (currentChatId === chatId) {
+      currentChatTitle.textContent = newTitle.trim();
+    }
   }
   
   hideContextMenu();
@@ -304,6 +501,50 @@ function deleteChat() {
 }
 
 /**
+ * Toggles pin status of a chat.
+ */
+function togglePinChat() {
+  if (!contextMenuTarget) return;
+  
+  const chatId = contextMenuTarget.getAttribute('data-chat-id');
+  if (!chatId) return;
+  
+  const session = chatHistory.find(s => s.id === chatId);
+  if (!session) return;
+  
+  session.isPinned = !session.isPinned;
+  session.updatedAt = new Date().toISOString();
+  saveHistoryToStorage();
+  renderHistoryList();
+  
+  showToast(session.isPinned ? 'Chat pinned' : 'Chat unpinned');
+  
+  hideContextMenu();
+}
+
+/**
+ * Toggles archive status of a chat.
+ */
+function toggleArchiveChat() {
+  if (!contextMenuTarget) return;
+  
+  const chatId = contextMenuTarget.getAttribute('data-chat-id');
+  if (!chatId) return;
+  
+  const session = chatHistory.find(s => s.id === chatId);
+  if (!session) return;
+  
+  session.isArchived = !session.isArchived;
+  session.updatedAt = new Date().toISOString();
+  saveHistoryToStorage();
+  renderHistoryList();
+  
+  showToast(session.isArchived ? 'Chat archived' : 'Chat unarchived');
+  
+  hideContextMenu();
+}
+
+/**
  * Handles file attachment.
  */
 function handleFileAttachment() {
@@ -326,6 +567,331 @@ async function processAttachedFile() {
 }
 
 /**
+ * Shows the templates modal.
+ */
+function showTemplatesModal() {
+  templatesModal.classList.add('active');
+}
+
+/**
+ * Hides the templates modal.
+ */
+function hideTemplatesModal() {
+  templatesModal.classList.remove('active');
+}
+
+/**
+ * Applies a template to start a new chat.
+ */
+function applyTemplate(templateId: string) {
+  const template = TEMPLATES.find(t => t.id === templateId);
+  if (!template) return;
+  
+  if (template.id === 'custom') {
+    const customPrompt = prompt('Enter your custom template prompt:');
+    if (customPrompt && customPrompt.trim() !== '') {
+      chatInput.value = customPrompt.trim();
+      handleFormSubmit(new Event('submit'));
+    }
+  } else {
+    chatInput.value = template.prompt;
+    handleFormSubmit(new Event('submit'));
+  }
+  
+  hideTemplatesModal();
+}
+
+/**
+ * Shows the search modal.
+ */
+function showSearchModal() {
+  searchModal.classList.add('active');
+  searchInput.focus();
+}
+
+/**
+ * Hides the search modal.
+ */
+function hideSearchModal() {
+  searchModal.classList.remove('active');
+  searchInput.value = '';
+  searchResults.innerHTML = `
+    <div class="search-empty">
+      <i class="fas fa-search"></i>
+      <p>Search for messages in this conversation</p>
+    </div>
+  `;
+}
+
+/**
+ * Searches within the current chat.
+ */
+function searchInChat() {
+  const query = searchInput.value.trim().toLowerCase();
+  if (!query) {
+    searchResults.innerHTML = `
+      <div class="search-empty">
+        <i class="fas fa-search"></i>
+        <p>Search for messages in this conversation</p>
+      </div>
+    `;
+    return;
+  }
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (!session) return;
+  
+  const results = session.messages.filter(msg => 
+    msg.parts[0].text.toLowerCase().includes(query)
+  );
+  
+  if (results.length === 0) {
+    searchResults.innerHTML = `
+      <div class="search-empty">
+        <i class="fas fa-search"></i>
+        <p>No messages found matching "${query}"</p>
+      </div>
+    `;
+    return;
+  }
+  
+  searchResults.innerHTML = '';
+  results.forEach(msg => {
+    const resultItem = document.createElement('div');
+    resultItem.className = 'search-result-item';
+    resultItem.innerHTML = `
+      <div class="message-sender">${msg.role === 'user' ? 'You' : 'AJ STUDIOZ AI'}</div>
+      <div class="message-text">${highlightText(msg.parts[0].text, query)}</div>
+      <div class="message-time">${formatDate(new Date(msg.timestamp))}</div>
+    `;
+    
+    resultItem.addEventListener('click', () => {
+      // Scroll to the message in the chat
+      const messageElement = document.querySelector(`[data-message-id="${msg.id}"]`);
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        hideSearchModal();
+      }
+    });
+    
+    searchResults.appendChild(resultItem);
+  });
+}
+
+/**
+ * Highlights text in a string.
+ */
+function highlightText(text: string, query: string): string {
+  const regex = new RegExp(`(${query})`, 'gi');
+  return text.replace(regex, '<mark>$1</mark>');
+}
+
+/**
+ * Shows the code modal.
+ */
+function showCodeModal(language: string, code: string) {
+  document.getElementById('code-language')!.textContent = language;
+  codeContent.textContent = code;
+  hljs.highlightElement(codeContent);
+  codeModal.classList.add('active');
+}
+
+/**
+ * Hides the code modal.
+ */
+function hideCodeModal() {
+  codeModal.classList.remove('active');
+}
+
+/**
+ * Copies the full code to clipboard.
+ */
+function copyFullCode() {
+  const code = codeContent.textContent;
+  if (code) {
+    navigator.clipboard.writeText(code).then(() => {
+      showToast('Code copied to clipboard!');
+    }).catch(err => {
+      console.error('Failed to copy code: ', err);
+    });
+  }
+}
+
+/**
+ * Downloads the code as a file.
+ */
+function downloadCode() {
+  const code = codeContent.textContent;
+  const language = document.getElementById('code-language')?.textContent || 'code';
+  
+  if (code) {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aj-studioz-code-${language.toLowerCase()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Code downloaded!');
+  }
+}
+
+/**
+ * Toggles the formatting toolbar.
+ */
+function toggleFormattingToolbar() {
+  formattingToolbar.classList.toggle('active');
+}
+
+/**
+ * Applies formatting to the selected text.
+ */
+function applyFormatting(format: string) {
+  const textarea = chatInput;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const selectedText = textarea.value.substring(start, end);
+  
+  let formattedText = '';
+  
+  switch (format) {
+    case 'bold':
+      formattedText = `**${selectedText}**`;
+      break;
+    case 'italic':
+      formattedText = `*${selectedText}*`;
+      break;
+    case 'code':
+      formattedText = `\`${selectedText}\``;
+      break;
+    case 'link':
+      const url = prompt('Enter URL:');
+      if (url) {
+        formattedText = `[${selectedText}](${url})`;
+      } else {
+        formattedText = selectedText;
+      }
+      break;
+    case 'list':
+      formattedText = `\n- ${selectedText}\n`;
+      break;
+    case 'quote':
+      formattedText = `> ${selectedText}`;
+      break;
+    default:
+      formattedText = selectedText;
+  }
+  
+  textarea.value = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+  textarea.selectionStart = start;
+  textarea.selectionEnd = start + formattedText.length;
+  textarea.focus();
+  
+  autoResizeTextarea();
+}
+
+/**
+ * Initializes voice recognition.
+ */
+function initializeVoiceRecognition() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('Speech recognition not supported in your browser');
+    return;
+  }
+  
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  voiceRecognition = new SpeechRecognition();
+  
+  voiceRecognition.continuous = false;
+  voiceRecognition.interimResults = true;
+  voiceRecognition.lang = 'en-US';
+  
+  voiceRecognition.onstart = () => {
+    isListening = true;
+    voiceBtn.innerHTML = '<i class="fas fa-stop"></i>';
+    voiceBtn.classList.add('recording');
+    showToast('Listening...');
+  };
+  
+  voiceRecognition.onresult = (event: any) => {
+    const transcript = Array.from(event.results)
+      .map((result: any) => result[0])
+      .map((result) => result.transcript)
+      .join('');
+    
+    chatInput.value = transcript;
+    autoResizeTextarea();
+  };
+  
+  voiceRecognition.onerror = (event: any) => {
+    console.error('Speech recognition error', event.error);
+    isListening = false;
+    voiceBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+    voiceBtn.classList.remove('recording');
+    showToast(`Error: ${event.error}`);
+  };
+  
+  voiceRecognition.onend = () => {
+    isListening = false;
+    voiceBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+    voiceBtn.classList.remove('recording');
+  };
+}
+
+/**
+ * Toggles voice recognition.
+ */
+function toggleVoiceRecognition() {
+  if (!voiceRecognition) {
+    initializeVoiceRecognition();
+  }
+  
+  if (isListening) {
+    voiceRecognition.stop();
+  } else {
+    voiceRecognition.start();
+  }
+}
+
+/**
+ * Toggles bookmark status of the current chat.
+ */
+function toggleBookmarkChat() {
+  if (!currentChatId) return;
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (!session) return;
+  
+  session.isPinned = !session.isPinned;
+  session.updatedAt = new Date().toISOString();
+  saveHistoryToStorage();
+  renderHistoryList();
+  
+  bookmarkChatBtn.innerHTML = session.isPinned ? 
+    '<i class="fas fa-bookmark"></i>' : 
+    '<i class="far fa-bookmark"></i>';
+  
+  showToast(session.isPinned ? 'Chat bookmarked' : 'Bookmark removed');
+}
+
+/**
+ * Shows the keyboard shortcuts modal.
+ */
+function showShortcutsModal() {
+  shortcutsModal.classList.add('active');
+}
+
+/**
+ * Hides the keyboard shortcuts modal.
+ */
+function hideShortcutsModal() {
+  shortcutsModal.classList.remove('active');
+}
+
+/**
  * Exports the current chat as a text file.
  */
 function exportChat() {
@@ -340,7 +906,8 @@ function exportChat() {
   let chatText = `AJ STUDIOZ AI AGENT - Chat Export\n\n`;
   chatText += `Title: ${session.title}\n`;
   chatText += `Created: ${new Date(session.createdAt).toLocaleString()}\n`;
-  chatText += `Last Updated: ${new Date(session.updatedAt).toLocaleString()}\n\n`;
+  chatText += `Last Updated: ${new Date(session.updatedAt).toLocaleString()}\n`;
+  chatText += `Model: ${session.model}\n\n`;
   chatText += `----------------------------------------\n\n`;
   
   session.messages.forEach(msg => {
@@ -390,6 +957,35 @@ function filterChatHistory() {
   });
 }
 
+/**
+ * Saves the draft message.
+ */
+function saveDraft() {
+  if (settings.autoSave && chatInput.value.trim() !== '') {
+    draftMessage = chatInput.value;
+    localStorage.setItem('draftMessage', draftMessage);
+  }
+}
+
+/**
+ * Loads the draft message.
+ */
+function loadDraft() {
+  const savedDraft = localStorage.getItem('draftMessage');
+  if (savedDraft) {
+    chatInput.value = savedDraft;
+    autoResizeTextarea();
+  }
+}
+
+/**
+ * Clears the draft message.
+ */
+function clearDraft() {
+  draftMessage = '';
+  localStorage.removeItem('draftMessage');
+}
+
 
 // --- CHAT HISTORY MANAGEMENT ---
 
@@ -412,8 +1008,20 @@ function saveHistoryToStorage() {
  * Renders the chat history list in the sidebar.
  */
 function renderHistoryList() {
+    // Clear all lists
     chatHistoryList.innerHTML = '';
-    chatHistory.forEach(session => {
+    pinnedChatsList.innerHTML = '';
+    archivedChatsList.innerHTML = '';
+    
+    // Sort chats: pinned first, then by date (newest first)
+    const sortedChats = [...chatHistory].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+    
+    // Render chats in appropriate lists
+    sortedChats.forEach(session => {
         const li = document.createElement('li');
         li.className = 'history-item';
         li.setAttribute('data-chat-id', session.id);
@@ -423,6 +1031,7 @@ function renderHistoryList() {
         }
         
         const titleDiv = document.createElement('div');
+        titleDiv.className = 'title';
         titleDiv.textContent = session.title;
         
         const timestampDiv = document.createElement('div');
@@ -440,8 +1049,30 @@ function renderHistoryList() {
           showContextMenu(e.clientX, e.clientY, li);
         });
         
-        chatHistoryList.appendChild(li);
+        // Add to appropriate list
+        if (session.isPinned) {
+          pinnedChatsList.appendChild(li);
+        } else if (session.isArchived) {
+          archivedChatsList.appendChild(li);
+        } else {
+          chatHistoryList.appendChild(li);
+        }
     });
+    
+    // Show/hide empty state messages
+    if (pinnedChatsList.children.length === 0) {
+      const emptyItem = document.createElement('li');
+      emptyItem.className = 'history-item empty';
+      emptyItem.textContent = 'No pinned chats';
+      pinnedChatsList.appendChild(emptyItem);
+    }
+    
+    if (archivedChatsList.children.length === 0) {
+      const emptyItem = document.createElement('li');
+      emptyItem.className = 'history-item empty';
+      emptyItem.textContent = 'No archived chats';
+      archivedChatsList.appendChild(emptyItem);
+    }
 }
 
 /**
@@ -453,16 +1084,19 @@ function loadChatSession(chatId: string) {
     if (!session) return;
     
     currentChatId = chatId;
+    currentChatTitle.textContent = session.title;
     chatContainer.innerHTML = '';
-    session.messages.forEach((msg, index) => {
-        const isLastModelMessage = msg.role === 'model' && index === session.messages.length - 1;
+    session.messages.forEach((msg) => {
         appendMessage(msg.role, msg.parts[0].text, { 
-          isLastModelMessage,
-          timestamp: msg.timestamp 
+          messageId: msg.id,
+          timestamp: msg.timestamp,
+          reactions: msg.reactions,
+          isBookmarked: msg.isBookmarked
         });
     });
     chat = initializeChat(); // Re-initialize chat with history (if API supported it)
     renderHistoryList();
+    updateMessageCount();
     scrollToBottom();
     
     if (window.innerWidth <= 800 && sidebar.classList.contains('open')) {
@@ -475,10 +1109,13 @@ function loadChatSession(chatId: string) {
  */
 function startNewChat() {
     currentChatId = null;
+    currentChatTitle.textContent = 'New Chat';
     chatContainer.innerHTML = '';
     showWelcomeScreen();
     chat = initializeChat();
     renderHistoryList();
+    updateMessageCount();
+    
     if (window.innerWidth <= 800 && sidebar.classList.contains('open')) {
         toggleMobileMenu();
     }
@@ -508,13 +1145,38 @@ async function saveCurrentChat(prompt: string) {
           id: currentChatId, 
           title, 
           messages,
+          threads: [],
           createdAt: now,
-          updatedAt: now
+          updatedAt: now,
+          isPinned: false,
+          isArchived: false,
+          model: settings.model,
+          temperature: settings.temperature,
+          maxTokens: settings.maxTokens
         });
+        
+        currentChatTitle.textContent = title;
     }
     
     saveHistoryToStorage();
     renderHistoryList();
+    updateMessageCount();
+}
+
+/**
+ * Updates the message count in the header.
+ */
+function updateMessageCount() {
+  if (!currentChatId) {
+    messageCount.textContent = '0 messages';
+    return;
+  }
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (session) {
+    const count = session.messages.length;
+    messageCount.textContent = `${count} message${count !== 1 ? 's' : ''}`;
+  }
 }
 
 
@@ -588,12 +1250,12 @@ function processCodeBlocks(container: HTMLElement) {
         header.appendChild(langSpan);
         
         // Create copy button
-        const button = document.createElement('button');
-        button.className = 'copy-button';
-        button.innerHTML = ICONS.copy;
-        button.setAttribute('aria-label', 'Copy code to clipboard');
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-button';
+        copyButton.innerHTML = ICONS.copy;
+        copyButton.setAttribute('aria-label', 'Copy code to clipboard');
         
-        button.addEventListener('click', () => {
+        copyButton.addEventListener('click', () => {
             const codeText = code.textContent;
             if (codeText) {
                 navigator.clipboard.writeText(codeText).then(() => {
@@ -604,7 +1266,18 @@ function processCodeBlocks(container: HTMLElement) {
             }
         });
         
-        header.appendChild(button);
+        // Create expand button
+        const expandButton = document.createElement('button');
+        expandButton.className = 'copy-button';
+        expandButton.innerHTML = ICONS.expand;
+        expandButton.setAttribute('aria-label', 'Expand code');
+        
+        expandButton.addEventListener('click', () => {
+            showCodeModal(language, codeText || '');
+        });
+        
+        header.appendChild(copyButton);
+        header.appendChild(expandButton);
         pre.insertBefore(header, code);
     });
 }
@@ -620,15 +1293,21 @@ function appendMessage(
     role: 'user' | 'model', 
     content: string | HTMLElement, 
     options: { 
-      isLastModelMessage?: boolean;
+      messageId?: string;
       timestamp?: string;
+      reactions?: { emoji: string; count: number }[];
+      isBookmarked?: boolean;
     } = {}
 ): HTMLElement {
     hideWelcomeScreen();
   
+    const messageId = options.messageId || generateId();
+    const timestamp = options.timestamp || new Date().toISOString();
+  
     const messageElement = document.createElement('div');
     messageElement.classList.add('message', `${role}-message`);
     messageElement.dataset.role = role;
+    messageElement.dataset.messageId = messageId;
 
     const icon = document.createElement('div');
     icon.classList.add('message-icon');
@@ -647,7 +1326,6 @@ function appendMessage(
     
     const time = document.createElement('div');
     time.className = 'message-time';
-    const timestamp = options.timestamp || new Date().toISOString();
     time.textContent = formatDate(new Date(timestamp));
     
     header.appendChild(sender);
@@ -656,6 +1334,7 @@ function appendMessage(
 
     if (typeof content === 'string') {
         const messageContent = document.createElement('div');
+        messageContent.className = 'message-text';
         messageContent.innerHTML = parseMarkdown(content);
         messageContent.dataset.rawText = content; // Store raw text
         contentWrapper.appendChild(messageContent);
@@ -666,24 +1345,160 @@ function appendMessage(
     messageElement.appendChild(icon);
     messageElement.appendChild(contentWrapper);
 
-    if (role === 'model') {
-        const actions = document.createElement('div');
-        actions.className = 'message-actions';
-        if (options.isLastModelMessage) {
-            const regenButton = document.createElement('button');
-            regenButton.className = 'message-action-btn';
-            regenButton.innerHTML = ICONS.regenerate;
-            regenButton.title = 'Regenerate response';
-            regenButton.onclick = handleRegenerate;
-            actions.appendChild(regenButton);
-        }
-        messageElement.appendChild(actions);
-    }
+    // Add message actions
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+    
+    // Add reaction buttons
+    const reactionBtn = document.createElement('button');
+    reactionBtn.className = 'message-action-btn';
+    reactionBtn.innerHTML = ICONS.like;
+    reactionBtn.title = 'React to message';
+    reactionBtn.addEventListener('click', () => {
+      toggleReaction(messageId, '👍');
+    });
+    actions.appendChild(reactionBtn);
+    
+    // Add bookmark button
+    const bookmarkBtn = document.createElement('button');
+    bookmarkBtn.className = 'message-action-btn';
+    bookmarkBtn.innerHTML = options.isBookmarked ? ICONS.bookmarked : ICONS.bookmark;
+    bookmarkBtn.title = options.isBookmarked ? 'Remove bookmark' : 'Bookmark message';
+    bookmarkBtn.addEventListener('click', () => {
+      toggleBookmark(messageId);
+    });
+    actions.appendChild(bookmarkBtn);
+    
+    // Add copy button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'message-action-btn';
+    copyBtn.innerHTML = ICONS.copy;
+    copyBtn.title = 'Copy message';
+    copyBtn.addEventListener('click', () => {
+      copyMessage(messageId);
+    });
+    actions.appendChild(copyBtn);
+    
+    // Add reply button
+    const replyBtn = document.createElement('button');
+    replyBtn.className = 'message-action-btn';
+    replyBtn.innerHTML = ICONS.reply;
+    replyBtn.title = 'Reply to message';
+    replyBtn.addEventListener('click', () => {
+      replyToMessage(messageId);
+    });
+    actions.appendChild(replyBtn);
+    
+    contentWrapper.appendChild(actions);
   
     chatContainer.appendChild(messageElement);
     processCodeBlocks(contentWrapper);
     scrollToBottom();
     return contentWrapper;
+}
+
+/**
+ * Toggles a reaction on a message.
+ */
+function toggleReaction(messageId: string, emoji: string) {
+  if (!currentChatId) return;
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (!session) return;
+  
+  const message = session.messages.find(m => m.id === messageId);
+  if (!message) return;
+  
+  if (!message.reactions) {
+    message.reactions = [];
+  }
+  
+  const existingReaction = message.reactions.find(r => r.emoji === emoji);
+  if (existingReaction) {
+    existingReaction.count++;
+  } else {
+    message.reactions.push({ emoji, count: 1 });
+  }
+  
+  saveHistoryToStorage();
+  showToast(`Reacted with ${emoji}`);
+}
+
+/**
+ * Toggles bookmark on a message.
+ */
+function toggleBookmark(messageId: string) {
+  if (!currentChatId) return;
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (!session) return;
+  
+  const message = session.messages.find(m => m.id === messageId);
+  if (!message) return;
+  
+  message.isBookmarked = !message.isBookmarked;
+  saveHistoryToStorage();
+  
+  showToast(message.isBookmarked ? 'Message bookmarked' : 'Bookmark removed');
+  
+  // Update the bookmark icon
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (messageElement) {
+    const bookmarkBtn = messageElement.querySelector('.message-action-btn:nth-child(2)');
+    if (bookmarkBtn) {
+      bookmarkBtn.innerHTML = message.isBookmarked ? ICONS.bookmarked : ICONS.bookmark;
+      bookmarkBtn.title = message.isBookmarked ? 'Remove bookmark' : 'Bookmark message';
+    }
+  }
+}
+
+/**
+ * Copies a message to clipboard.
+ */
+function copyMessage(messageId: string) {
+  if (!currentChatId) return;
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (!session) return;
+  
+  const message = session.messages.find(m => m.id === messageId);
+  if (!message) return;
+  
+  navigator.clipboard.writeText(message.parts[0].text).then(() => {
+    showToast('Message copied to clipboard!');
+  }).catch(err => {
+    console.error('Failed to copy message: ', err);
+  });
+}
+
+/**
+ * Replies to a message.
+ */
+function replyToMessage(messageId: string) {
+  if (!currentChatId) return;
+  
+  const session = chatHistory.find(s => s.id === currentChatId);
+  if (!session) return;
+  
+  const message = session.messages.find(m => m.id === messageId);
+  if (!message) return;
+  
+  // Create a new thread
+  const threadId = generateId();
+  const thread: Thread = {
+    id: threadId,
+    parentMessageId: messageId,
+    messages: []
+  };
+  
+  session.threads.push(thread);
+  currentThread = thread;
+  
+  // Focus on input and add a reply indicator
+  chatInput.focus();
+  chatInput.placeholder = `Replying to: ${message.parts[0].text.substring(0, 50)}${message.parts[0].text.length > 50 ? '...' : ''}`;
+  
+  showToast('Reply started');
 }
 
 
@@ -735,6 +1550,7 @@ function hideWelcomeScreen() {
     }
 }
 
+
 // --- CORE CHAT LOGIC ---
 
 /**
@@ -751,8 +1567,12 @@ async function handleFormSubmit(e: Event) {
   isAwaitingResponse = true;
   setFormState(true);
   showTypingIndicator();
+  
+  // Clear draft
+  clearDraft();
 
-  appendMessage('user', prompt);
+  const messageId = generateId();
+  appendMessage('user', prompt, { messageId });
   
   const loadingIndicator = appendMessage('model', createLoadingIndicator());
 
@@ -771,7 +1591,6 @@ async function handleFormSubmit(e: Event) {
     
     loadingIndicator.dataset.rawText = fullResponse; // Store final raw text
     processCodeBlocks(loadingIndicator);
-    addRegenerateButtonToLastMessage();
     await saveCurrentChat(prompt);
 
   } catch (error) {
@@ -818,7 +1637,6 @@ async function handleRegenerate() {
         }
         loadingIndicator.dataset.rawText = fullResponse;
         processCodeBlocks(loadingIndicator);
-        addRegenerateButtonToLastMessage();
         await saveCurrentChat(prompt);
     } catch (error) {
         console.error(error);
@@ -876,13 +1694,15 @@ function getMessagesFromDOM(): Message[] {
     const messages: Message[] = [];
     chatContainer.querySelectorAll('.message').forEach(el => {
         const role = el.getAttribute('data-role') as 'user' | 'model';
-        const contentEl = el.querySelector('.message-content > div:last-child') as HTMLElement;
+        const messageId = el.getAttribute('data-message-id') || generateId();
+        const contentEl = el.querySelector('.message-text') as HTMLElement;
         const text = contentEl?.dataset.rawText || contentEl?.textContent || '';
         const timestampEl = el.querySelector('.message-time');
         const timestamp = timestampEl?.getAttribute('data-timestamp') || new Date().toISOString();
         
         if (role && text) {
             messages.push({ 
+              id: messageId,
               role, 
               parts: [{ text }], 
               timestamp 
@@ -890,27 +1710,6 @@ function getMessagesFromDOM(): Message[] {
         }
     });
     return messages;
-}
-
-/**
- * Adds the regenerate button to the very last model message.
- */
-function addRegenerateButtonToLastMessage() {
-    // Remove existing regenerate buttons
-    chatContainer.querySelectorAll('.message-actions').forEach(el => el.remove());
-
-    const lastModelMessage = chatContainer.querySelector('.model-message:last-of-type');
-    if (lastModelMessage) {
-        const actions = document.createElement('div');
-        actions.className = 'message-actions';
-        const regenButton = document.createElement('button');
-        regenButton.className = 'message-action-btn';
-        regenButton.innerHTML = ICONS.regenerate;
-        regenButton.title = 'Regenerate response';
-        regenButton.onclick = handleRegenerate;
-        actions.appendChild(regenButton);
-        lastModelMessage.appendChild(actions);
-    }
 }
 
 /**
@@ -934,6 +1733,71 @@ function handleDocumentClick(e: MouseEvent) {
   }
 }
 
+/**
+ * Handles keyboard shortcuts.
+ */
+function handleKeyboardShortcuts(e: KeyboardEvent) {
+  // Only process shortcuts if not in an input field
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+    return;
+  }
+  
+  // Ctrl/Cmd + N: New Chat
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault();
+    startNewChat();
+  }
+  
+  // Ctrl/Cmd + S: Save Chat
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    if (currentChatId) {
+      saveCurrentChat(chatInput.value);
+      showToast('Chat saved');
+    }
+  }
+  
+  // Ctrl/Cmd + E: Export Chat
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+    e.preventDefault();
+    exportChat();
+  }
+  
+  // Ctrl/Cmd + F: Search in Chat
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    showSearchModal();
+  }
+  
+  // Ctrl/Cmd + /: Show Shortcuts
+  if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+    e.preventDefault();
+    showShortcutsModal();
+  }
+  
+  // Ctrl/Cmd + D: Toggle Dark Mode
+  if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+    e.preventDefault();
+    toggleTheme();
+  }
+  
+  // Ctrl/Cmd + B: Bold Text
+  if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+    e.preventDefault();
+    if (document.activeElement === chatInput) {
+      applyFormatting('bold');
+    }
+  }
+  
+  // Ctrl/Cmd + I: Italic Text
+  if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+    e.preventDefault();
+    if (document.activeElement === chatInput) {
+      applyFormatting('italic');
+    }
+  }
+}
+
 
 // --- INITIALIZATION ---
 
@@ -945,6 +1809,7 @@ function initializeApp() {
     loadSettings();
     loadHistoryFromStorage();
     renderHistoryList();
+    loadDraft();
 
     if (chatHistory.length > 0) {
         loadChatSession(chatHistory[0].id);
@@ -956,6 +1821,7 @@ function initializeApp() {
     chatForm.addEventListener('submit', handleFormSubmit);
     chatInput.addEventListener('input', autoResizeTextarea);
     chatInput.addEventListener('keydown', handleTextareaKeydown);
+    chatInput.addEventListener('input', saveDraft);
     newChatBtn.addEventListener('click', startNewChat);
     sidebarToggleBtn.addEventListener('click', toggleSidebar);
     themeToggleBtn.addEventListener('click', toggleTheme);
@@ -971,6 +1837,73 @@ function initializeApp() {
     fileInput.addEventListener('change', processAttachedFile);
     renameChatOption.addEventListener('click', renameChat);
     deleteChatOption.addEventListener('click', deleteChat);
+    templatesBtn.addEventListener('click', showTemplatesModal);
+    closeTemplatesBtn.addEventListener('click', hideTemplatesModal);
+    searchInChatBtn.addEventListener('click', showSearchModal);
+    closeSearchBtn.addEventListener('click', hideSearchModal);
+    searchInput.addEventListener('input', searchInChat);
+    closeCodeBtn.addEventListener('click', hideCodeModal);
+    copyFullCodeBtn.addEventListener('click', copyFullCode);
+    downloadCodeBtn.addEventListener('click', downloadCode);
+    formatBtn.addEventListener('click', toggleFormattingToolbar);
+    voiceBtn.addEventListener('click', toggleVoiceRecognition);
+    bookmarkChatBtn.addEventListener('click', toggleBookmarkChat);
+    
+    // Formatting toolbar buttons
+    document.querySelectorAll('.format-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        applyFormatting(btn.getAttribute('data-format') || '');
+      });
+    });
+    
+    // Template cards
+    document.querySelectorAll('.template-card').forEach(card => {
+      card.addEventListener('click', () => {
+        applyTemplate(card.getAttribute('data-template') || '');
+      });
+    });
+    
+    // Theme options
+    document.querySelectorAll('.theme-option').forEach(option => {
+      option.addEventListener('click', () => {
+        const theme = option.getAttribute('data-theme');
+        if (theme) {
+          document.body.setAttribute('data-theme', theme);
+          settings.theme = theme;
+          localStorage.setItem('settings', JSON.stringify(settings));
+          showToast(`Theme changed to ${theme}`);
+        }
+      });
+    });
+    
+    // Tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabId = btn.getAttribute('data-tab');
+        if (tabId) {
+          // Remove active class from all tabs and contents
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          
+          // Add active class to clicked tab and corresponding content
+          btn.classList.add('active');
+          document.getElementById(`${tabId}-tab`)?.classList.add('active');
+        }
+      });
+    });
+    
+    // Category toggles
+    document.querySelectorAll('.category-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const category = toggle.closest('.category');
+        const list = category?.querySelector('.chat-list');
+        if (list) {
+          list.classList.toggle('collapsed');
+          toggle.querySelector('i')?.classList.toggle('fa-chevron-down');
+          toggle.querySelector('i')?.classList.toggle('fa-chevron-up');
+        }
+      });
+    });
     
     // Close context menu on document click
     document.addEventListener('click', handleDocumentClick);
@@ -981,6 +1914,35 @@ function initializeApp() {
         toggleSettingsModal();
       }
     });
+    
+    templatesModal.addEventListener('click', (e) => {
+      if (e.target === templatesModal) {
+        hideTemplatesModal();
+      }
+    });
+    
+    searchModal.addEventListener('click', (e) => {
+      if (e.target === searchModal) {
+        hideSearchModal();
+      }
+    });
+    
+    codeModal.addEventListener('click', (e) => {
+      if (e.target === codeModal) {
+        hideCodeModal();
+      }
+    });
+    
+    shortcutsModal.addEventListener('click', (e) => {
+      if (e.target === shortcutsModal) {
+        hideShortcutsModal();
+      }
+    });
+    
+    // Keyboard shortcuts
+    if (settings.keyboardShortcuts) {
+      document.addEventListener('keydown', handleKeyboardShortcuts);
+    }
 }
 
 initializeApp();
